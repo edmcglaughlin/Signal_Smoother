@@ -17,10 +17,10 @@
 #define PI 3.14159265358979323846
 
 /* Working buffers. */
-static double in_buf[SM_BLOCK];
-static double out_buf[SM_BLOCK];
-static double coeffs[SM_TAPS];
-static double history[SM_TAPS];     /* tail of the previous block        */
+static float32_t in_buf[SM_BLOCK];
+static float32_t out_buf[SM_BLOCK];
+static float32_t coeffs[SM_TAPS];
+static float32_t history[SM_TAPS];     /* tail of the previous block        */
 static uint32_t sample_index;       /* running sample position for the tone */
 
 volatile SmootherStats g_sm;
@@ -33,20 +33,20 @@ uint32_t g_deadline_us;
 /* Design a windowed-sinc low-pass filter into coeffs[]. */
 static void design_lowpass(void)
 {
-    double fc = SM_CUTOFF_HZ / (double)SM_FS_HZ;   /* normalized cutoff  */
-    double mid = (double)(SM_TAPS - 1) / 2.0;
+    float32_t fc = SM_CUTOFF_HZ / (float32_t)SM_FS_HZ;   /* normalized cutoff  */
+    float32_t mid = (float32_t)(SM_TAPS - 1) / 2.0;
     uint32_t k;
 
     for (k = 0; k < SM_TAPS; k++) {
-        double m = (double)k - mid;
-        double h;
+        float32_t m = (float32_t)k - mid;
+        float32_t h;
         if (m == 0.0) {
             h = 2.0 * fc;
         } else {
             h = sin(2.0 * PI * fc * m) / (PI * m);
         }
         /* Hamming window */
-        double w = 0.54 - 0.46 * cos(2.0 * PI * (double)k / (double)(SM_TAPS - 1));
+        float32_t w = 0.54 - 0.46 * cos(2.0 * PI * (float32_t)k / (float32_t)(SM_TAPS - 1));
         coeffs[k] = h * w;
     }
 }
@@ -56,9 +56,9 @@ static void gen_signal(void)
 {
     uint32_t i;
     for (i = 0; i < SM_BLOCK; i++) {
-        double t     = (double)(sample_index + i) / (double)SM_FS_HZ;
-        double tone  = 0.8 * sin(2.0 * PI * SM_TONE_HZ * t);
-        double noise = ((double)rand() / (double)RAND_MAX - 0.5) * 0.5;
+        float32_t t     = (float32_t)(sample_index + i) / (float32_t)SM_FS_HZ;
+        float32_t tone  = 0.8 * sin(2.0 * PI * SM_TONE_HZ * t);
+        float32_t noise = ((float32_t)rand() / (float32_t)RAND_MAX - 0.5) * 0.5;
         in_buf[i] = tone + noise;
     }
     sample_index += SM_BLOCK;
@@ -70,10 +70,10 @@ static void fir_filter(void)
 {
     uint32_t n, k;
     for (n = 0; n < SM_BLOCK; n++) {
-        double acc = 0.0;
+        float32_t acc = 0.0;
         for (k = 0; k < SM_TAPS; k++) {
             int32_t idx = (int32_t)n - (int32_t)k;
-            double x;
+            float32_t x;
             if (idx >= 0) {
                 x = in_buf[idx];
             } else {
@@ -90,14 +90,14 @@ static void fir_filter(void)
 }
 
 /* Root-mean-square level of out_buf[]. */
-static double compute_level(void)
+static float32_t compute_level(void)
 {
-    double acc = 0.0;
+    float32_t acc = 0.0;
     uint32_t i;
     for (i = 0; i < SM_BLOCK; i++) {
         acc += out_buf[i] * out_buf[i];
     }
-    return sqrt(acc / (double)SM_BLOCK);
+    return sqrt(acc / (float32_t)SM_BLOCK);
 }
 
 /* ------------------------------------------------------------------ */
@@ -112,10 +112,14 @@ void Smoother_Init(void)
     g_deadline_us = SM_PERIOD_MS * 1000U;   /* 10 ms -> 10000 us */
 }
 
+
+extern volatile uint32_t design;	// ECM  - filter design time
+
 void Smoother_RunFrame(void)
 {
     uint32_t t0 = Micros_Now();
     uint32_t t;
+	  uint32_t design;	// ECM
 
     /* Stage 1: generate */
     t = Micros_Now();
@@ -125,7 +129,9 @@ void Smoother_RunFrame(void)
     /* Stage 2: filter */
     t = Micros_Now();
     design_lowpass();
-    fir_filter();
+	  design = Micros_Since(t);		// ECM
+    t = Micros_Now();						// ECM
+  	fir_filter();
     g_sm.us_filter = Micros_Since(t);
 
     /* Stage 3: level */
