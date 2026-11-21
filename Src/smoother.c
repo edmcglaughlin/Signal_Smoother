@@ -103,6 +103,8 @@ static float32_t compute_level(void)
 /* ------------------------------------------------------------------ */
 /* Public interface                                                    */
 /* ------------------------------------------------------------------ */
+volatile uint32_t design;	// ECM  - filter design time
+
 void Smoother_Init(void)
 {
     memset((void *)&g_sm, 0, sizeof(g_sm));
@@ -110,16 +112,17 @@ void Smoother_Init(void)
     sample_index = 0;
     srand(1);
     g_deadline_us = SM_PERIOD_MS * 1000U;   /* 10 ms -> 10000 us */
+	  
+	  uint32_t t = Micros_Now();
+	  design_lowpass();				// ECM - only need to call once to calc the coefficients
+	  design = Micros_Since(t);		// ECM
 }
 
-
-extern volatile uint32_t design;	// ECM  - filter design time
 
 void Smoother_RunFrame(void)
 {
     uint32_t t0 = Micros_Now();
     uint32_t t;
-	  uint32_t design;	// ECM
 
     /* Stage 1: generate */
     t = Micros_Now();
@@ -128,9 +131,9 @@ void Smoother_RunFrame(void)
 
     /* Stage 2: filter */
     t = Micros_Now();
-    design_lowpass();
-	  design = Micros_Since(t);		// ECM
-    t = Micros_Now();						// ECM
+    // design_lowpass();				// ECM - moving to intiailization
+	  // design = Micros_Since(t);		// ECM
+    // t = Micros_Now();						// ECM
   	fir_filter();
     g_sm.us_filter = Micros_Since(t);
 
