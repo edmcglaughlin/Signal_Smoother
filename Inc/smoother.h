@@ -15,12 +15,14 @@
 
 #include <stdint.h>
 
+// ECM - these are now defined in fir_lowpass.h
 /* ---- Signal / analysis configuration ------------------------------- */
-#define SM_FS_HZ       8000U     /* sample rate of the test signal       */
-#define SM_BLOCK       512U      /* samples processed per frame          */
-#define SM_TAPS        128U      /* FIR filter length                    */
+// #define SM_FS_HZ       8000U     /* sample rate of the test signal       */
+// #define SM_BLOCK       512U      /* samples processed per frame          */
+// #define SM_TAPS        128U      /* FIR filter length                    */
+// #define SM_CUTOFF_HZ   800.0     /* low-pass cutoff                      */
+
 #define SM_TONE_HZ     300.0     /* frequency of the clean tone          */
-#define SM_CUTOFF_HZ   800.0     /* low-pass cutoff                      */
 
 /* ---- Real-time budget ---------------------------------------------- */
 #define SM_PERIOD_MS   10U       /* one frame every 10 ms -> the deadline */
@@ -45,3 +47,4 @@ void Smoother_Init(void);        /* set up tables, clear stats            */
 void Smoother_RunFrame(void);    /* generate -> filter -> level (timed)   */
 
 #endif /* SMOOTHER_H */
+

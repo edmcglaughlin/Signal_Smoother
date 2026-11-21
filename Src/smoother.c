@@ -8,85 +8,34 @@
  * thing you are being asked to make fast enough. Measure first.
  */
 #include "smoother.h"
+#include "fir_lowpass.h"
 #include "micros.h"
 #include "stm32f4xx.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define PI 3.14159265358979323846
-
 /* Working buffers. */
-static float32_t in_buf[SM_BLOCK];
-static float32_t out_buf[SM_BLOCK];
-static float32_t coeffs[SM_TAPS];
-static float32_t history[SM_TAPS];     /* tail of the previous block        */
+static float32_t in_buf[FIR_BLOCK_SIZE];
+static float32_t out_buf[FIR_BLOCK_SIZE];
+
 static uint32_t sample_index;       /* running sample position for the tone */
 
 volatile SmootherStats g_sm;
 uint32_t g_deadline_us;
 
-/* ------------------------------------------------------------------ */
-/* Stage helpers                                                       */
-/* ------------------------------------------------------------------ */
-
-/* Design a windowed-sinc low-pass filter into coeffs[]. */
-static void design_lowpass(void)
-{
-    float32_t fc = SM_CUTOFF_HZ / (float32_t)SM_FS_HZ;   /* normalized cutoff  */
-    float32_t mid = (float32_t)(SM_TAPS - 1) / 2.0;
-    uint32_t k;
-
-    for (k = 0; k < SM_TAPS; k++) {
-        float32_t m = (float32_t)k - mid;
-        float32_t h;
-        if (m == 0.0) {
-            h = 2.0 * fc;
-        } else {
-            h = sin(2.0 * PI * fc * m) / (PI * m);
-        }
-        /* Hamming window */
-        float32_t w = 0.54 - 0.46 * cos(2.0 * PI * (float32_t)k / (float32_t)(SM_TAPS - 1));
-        coeffs[k] = h * w;
-    }
-}
 
 /* Fill in_buf[] with a clean tone plus uniform noise. */
 static void gen_signal(void)
 {
     uint32_t i;
-    for (i = 0; i < SM_BLOCK; i++) {
-        float32_t t     = (float32_t)(sample_index + i) / (float32_t)SM_FS_HZ;
+    for (i = 0; i < FIR_BLOCK_SIZE; i++) {
+        float32_t t     = (float32_t)(sample_index + i) / (float32_t)FIR_FS_HZ;
         float32_t tone  = 0.8 * sin(2.0 * PI * SM_TONE_HZ * t);
         float32_t noise = ((float32_t)rand() / (float32_t)RAND_MAX - 0.5) * 0.5;
         in_buf[i] = tone + noise;
     }
-    sample_index += SM_BLOCK;
-}
-
-/* Convolve in_buf[] with coeffs[] into out_buf[], carrying history across
- * frames so the filter output is continuous. */
-static void fir_filter(void)
-{
-    uint32_t n, k;
-    for (n = 0; n < SM_BLOCK; n++) {
-        float32_t acc = 0.0;
-        for (k = 0; k < SM_TAPS; k++) {
-            int32_t idx = (int32_t)n - (int32_t)k;
-            float32_t x;
-            if (idx >= 0) {
-                x = in_buf[idx];
-            } else {
-                x = history[SM_TAPS + idx];   /* reach into previous block */
-            }
-            acc += coeffs[k] * x;
-        }
-        out_buf[n] = acc;
-    }
-    /* Save the last SM_TAPS samples as history for next frame. */
-    for (k = 0; k < SM_TAPS; k++) {
-        history[k] = in_buf[SM_BLOCK - SM_TAPS + k];
-    }
+    sample_index += FIR_BLOCK_SIZE;
 }
 
 /* Root-mean-square level of out_buf[]. */
@@ -94,10 +43,10 @@ static float32_t compute_level(void)
 {
     float32_t acc = 0.0;
     uint32_t i;
-    for (i = 0; i < SM_BLOCK; i++) {
+    for (i = 0; i < FIR_BLOCK_SIZE; i++) {
         acc += out_buf[i] * out_buf[i];
     }
-    return sqrt(acc / (float32_t)SM_BLOCK);
+    return sqrt(acc / (float32_t)FIR_BLOCK_SIZE);
 }
 
 /* ------------------------------------------------------------------ */
@@ -108,16 +57,15 @@ volatile uint32_t design;	// ECM  - filter design time
 void Smoother_Init(void)
 {
     memset((void *)&g_sm, 0, sizeof(g_sm));
-    memset(history, 0, sizeof(history));
     sample_index = 0;
     srand(1);
     g_deadline_us = SM_PERIOD_MS * 1000U;   /* 10 ms -> 10000 us */
 	  
-	  uint32_t t = Micros_Now();
-	  design_lowpass();				// ECM - only need to call once to calc the coefficients
-	  design = Micros_Since(t);		// ECM
+    // Initialize fir_lowpass module
+    uint32_t t = Micros_Now();
+    fir_lowpass_init();
+    design = Micros_Since(t);	
 }
-
 
 void Smoother_RunFrame(void)
 {
@@ -131,10 +79,7 @@ void Smoother_RunFrame(void)
 
     /* Stage 2: filter */
     t = Micros_Now();
-    // design_lowpass();				// ECM - moving to intiailization
-	  // design = Micros_Since(t);		// ECM
-    // t = Micros_Now();						// ECM
-  	fir_filter();
+    fir_lowpass_process(in_buf, out_buf);
     g_sm.us_filter = Micros_Since(t);
 
     /* Stage 3: level */
@@ -152,3 +97,4 @@ void Smoother_RunFrame(void)
         g_sm.misses++;
     }
 }
+
