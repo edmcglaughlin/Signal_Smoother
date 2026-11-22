@@ -23,10 +23,15 @@ static void SystemClock_Config(void);
 static void LED_Init(void);
 void Error_Handler(void);
 
+uint32_t scaled = 0;
+
 /* Light 0..4 LEDs in proportion to the signal level. */
 static void display_level(float level)
 {
     uint32_t bars = (uint32_t)(level * 6.0f);   /* scale to roughly 0..4 */
+	  bars = (uint32_t)((level - 0.56f) * 500.0f);
+	  scaled = bars;
+	
     if (bars > 4U) bars = 4U;
     HAL_GPIO_WritePin(LED_PORT, LED_GREEN,  bars >= 1U ? GPIO_PIN_SET : GPIO_PIN_RESET);
     HAL_GPIO_WritePin(LED_PORT, LED_ORANGE, bars >= 2U ? GPIO_PIN_SET : GPIO_PIN_RESET);
@@ -34,13 +39,25 @@ static void display_level(float level)
     HAL_GPIO_WritePin(LED_PORT, LED_BLUE,   bars >= 4U ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
+
+
+
+
+uint32_t run_frame;
+uint32_t loop_time;
+
 static void smoother_thread(void *arg)
 {
     (void)arg;
+	  
+	  uint32_t sm_period_ticks = (SM_PERIOD_MS * osKernelGetTickFreq()) / 1000U;
+	  uint32_t top; 
     for (;;) {
         uint32_t start = osKernelGetTickCount();
+        uint32_t next_wake_tick = osKernelGetTickCount() + sm_period_ticks;;
+				top = Micros_Now();
 
-        Smoother_RunFrame();
+				Smoother_RunFrame();
 
         /* A debug print in the hot path: performance smell "your own probes".
          * Left commented because, depending on how STDOUT is retargeted, it can
@@ -53,11 +70,11 @@ static void smoother_thread(void *arg)
                   (unsigned long)g_sm.misses); */
 
         display_level(g_sm.level);
-
-        /* Pace the loop to one frame every SM_PERIOD_MS. */
-        while ((osKernelGetTickCount() - start) < SM_PERIOD_MS) {
-            /* wait */
-        }
+			  run_frame = Micros_Since(top);
+								
+        // Sleep until that exact tick is reached
+        osDelayUntil(next_wake_tick);
+			  loop_time = Micros_Since(top);
     }
 }
 

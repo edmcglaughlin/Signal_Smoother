@@ -34,22 +34,10 @@ static void gen_signal(void)
 	
     for (i = 0; i < FIR_BLOCK_SIZE; i++) {
         float32_t t     = (float32_t)(sample_index + i) / (float32_t)FIR_FS_HZ;
-	
-	  __DSB();
-    __ISB();
-    start_cycles = DWT->CYCCNT;
-        // float32_t tone  = 0.8 * arm_sin_f32(2.0 * PI * SM_TONE_HZ * t);
-        float32_t tone  = 0.8 * sin(2.0 * PI * SM_TONE_HZ * t);
-	  __DSB();
-    __ISB();
-    end_cycles = DWT->CYCCNT;
-		sin_cycles = end_cycles - start_cycles;			
-			
-			
-			
-        // float32_t tone  = 0.8 * sin(2.0 * PI * SM_TONE_HZ * t);
-        float32_t noise = ((float32_t)rand() / (float32_t)RAND_MAX - 0.5) * 0.5;
-        in_buf[i] = tone + noise;
+        float32_t tone  = 0.8 * arm_sin_f32(2.0 * PI * SM_TONE_HZ * t);
+        float32_t noise = (((float32_t)rand() / (float32_t)RAND_MAX) - 0.5) * 0.5;
+			  //float32_t noise = ((float32_t)rand() / (float32_t)RAND_MAX - 0.5) * 0.5;
+        in_buf[i] = tone; // + noise;
     }
     sample_index += FIR_BLOCK_SIZE;
 }
