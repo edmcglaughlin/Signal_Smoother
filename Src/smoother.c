@@ -16,8 +16,8 @@
 #include <string.h>
 
 /* Working buffers. */
-static float32_t in_buf[FIR_BLOCK_SIZE];
-static float32_t out_buf[FIR_BLOCK_SIZE];
+ float32_t in_buf[FIR_BLOCK_SIZE];
+ float32_t out_buf[FIR_BLOCK_SIZE];
 
 static uint32_t sample_index;       /* running sample position for the tone */
 
@@ -53,6 +53,7 @@ static float32_t compute_level(void)
 /* Public interface                                                    */
 /* ------------------------------------------------------------------ */
 volatile uint32_t design;	// ECM  - filter design time
+void DWT_Init(void);
 
 void Smoother_Init(void)
 {
@@ -65,6 +66,18 @@ void Smoother_Init(void)
     uint32_t t = Micros_Now();
     fir_lowpass_init();
     design = Micros_Since(t);	
+		DWT_Init();
+}
+
+void DWT_Init(void) {
+    /* Enable TRC (Trace) in CoreDebug DEMCR */
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+
+    /* Reset the cycle counter */
+    DWT->CYCCNT = 0;
+
+    /* Enable the cycle counter */
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
 void Smoother_RunFrame(void)

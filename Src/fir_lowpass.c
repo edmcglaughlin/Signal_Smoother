@@ -14,11 +14,12 @@
  *   - Linear phase, group delay = (N - 1) / 2 = 63.5 samples (~7.9 ms)
  */
 #include "fir_lowpass.h"
+#include "stm32f4xx.h"
 #include <math.h>
 
 /* CMSIS-DSP requires a state buffer of numTaps + blockSize - 1 samples. */
-static float32_t s_coeffs[FIR_NUM_TAPS];
-static float32_t s_state[FIR_NUM_TAPS + FIR_BLOCK_SIZE - 1U];
+float32_t s_coeffs[FIR_NUM_TAPS];
+CCMRAM float32_t s_state[FIR_NUM_TAPS + FIR_BLOCK_SIZE - 1U];
 static arm_fir_instance_f32 s_fir;
 
 /**
@@ -63,9 +64,21 @@ void fir_lowpass_init(void)
                      FIR_BLOCK_SIZE);
 }
 
+volatile uint32_t fir_cycles = 0;
+
 void fir_lowpass_process(float32_t *in, float32_t *out)
 {
+		uint32_t start_cycles, end_cycles;
+	  __DSB();
+    __ISB();
+    start_cycles = DWT->CYCCNT;
+
+
     arm_fir_f32(&s_fir, in, out, FIR_BLOCK_SIZE);
+	  __DSB();
+    __ISB();
+    end_cycles = DWT->CYCCNT;
+		fir_cycles = end_cycles - start_cycles;
 }
 
 const float32_t *fir_lowpass_coeffs(void)

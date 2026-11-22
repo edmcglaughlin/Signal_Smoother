@@ -65,6 +65,8 @@ int main(void)
 {
     HAL_Init();
     SystemClock_Config();
+  	FLASH->ACR |= FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN;
+
     SystemCoreClockUpdate();
     LED_Init();
     Micros_Init();

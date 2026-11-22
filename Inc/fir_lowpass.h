@@ -12,8 +12,18 @@
 
 #include "arm_math.h"
 
-#ifndef PI
-  #define PI               3.14159265358979f
+/* Place a variable in the 64 KB core-coupled memory (0x10000000).
+ * CCM is reachable by the CPU only (D-bus): DMA cannot read or write it,
+ * so never put DMA buffers here. Contents are undefined at reset.
+ *
+ * Keil / Arm Compiler 6: the name must start with ".bss" so armclang
+ *   emits a zero-init (ZI) section; any other name becomes RW data with
+ *   a copy of zeros stored in flash. Placed by RW_CCM in fir_ccm.sct.
+ * GCC: placed by .ccmram_bss in ccmram_ld_snippet.ld. */
+#if defined(__ARMCC_VERSION) && (__ARMCC_VERSION >= 6010050)
+  #define CCMRAM  __attribute__((section(".bss.ccmram"), aligned(4)))
+#else
+  #define CCMRAM  __attribute__((section(".ccmram_bss"), aligned(4)))
 #endif
 
 #define FIR_FS_HZ        8000.0f
